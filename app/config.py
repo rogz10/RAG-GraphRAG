@@ -43,6 +43,7 @@ class Settings:
         "sentence-transformers/all-MiniLM-L6-v2",
     )
     llm_model: str = os.getenv("LLM_MODEL", "llama3.2")
+    extraction_model: str = os.getenv("EXTRACTION_MODEL", "gemma3:12b") # modèle utilisé pour extraire les triplets du texte
 
     # paramètres du découpage documentaire et de la recherche sémantique
     chunk_size: int = int(os.getenv("CHUNK_SIZE", "1000")) # taille maximale d un chunk en nombre de caractères

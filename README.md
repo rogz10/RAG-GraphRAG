@@ -1,194 +1,129 @@
-# Personal RAG
+# RAG sur la réglementation énergétique des zones non interconnectées
 
-Personal RAG est une base de projet dédiée à la construction d'un assistant capable d'exploiter des documents personnels à l'aide de la génération augmentée par récupération, ou Retrieval-Augmented Generation.
+Assistant de questions-réponses sur des documents publics de la CRE et de l'État (délibérations, programmations pluriannuelles de l'énergie). Il concerne les zones non interconnectées : La Réunion, Martinique, Guyane.
 
-L'objectif est de mettre en place une architecture claire, modulaire et extensible pour charger des documents, les indexer dans une base vectorielle, rechercher les passages pertinents et produire des réponses contextualisées avec un modèle de langage.
+Le projet contient une API RAG, un protocole d'évaluation de la recherche de passages et un fine-tuning du modèle d'embeddings.
 
-## Objectifs Du Projet
+## Ce qui est fait
 
-- Concevoir une architecture RAG propre et maintenable.
-- Structurer le code autour de responsabilités séparées : ingestion, embeddings, stockage vectoriel, pipeline RAG et API.
-- Expérimenter avec les outils modernes de l'écosystème LLM.
-- Construire un projet présentable dans un portfolio technique.
+- Pipeline RAG : chargement des PDF, découpage en chunks, base vectorielle Chroma, réponse par un LLM local avec Ollama.
+- API FastAPI (`/health`, `/ingest`, `/ask`, `/metrics`) et image Docker.
+- Jeu d'évaluation de 714 questions générées par `gemma3:27b`, découpé en train / validation / test par passage.
+- Comparaison de deux modèles d'embeddings et de BM25, suivie dans MLflow.
+- Fine-tuning du modèle multilingue sur les questions d'entraînement.
+- Ontologie du domaine : 7 classes, 11 relations.
+- Prototype d'extraction de triplets par LLM, vérifiés par l'ontologie.
+- CI GitHub Actions : ruff, pytest, build Docker.
 
-## Fonctionnement Général
+## Ce qui reste à faire
 
-```text
-Documents
-  -> ingestion
-  -> découpage en chunks
-  -> génération d'embeddings
-  -> stockage dans une base vectorielle
-  -> recherche sémantique
-  -> génération de réponse avec un LLM
-```
+- Mesurer les modèles sur le jeu de test.
+- Lancer l'extraction de triplets sur tout le corpus et mesurer sa précision.
+- Construire le graphe de connaissances et la recherche multi-sauts.
+- Comparer les modes vectoriel, graphe et hybride.
 
-Cette approche permet au modèle de répondre à partir d'un contexte documentaire précis, au lieu de s'appuyer uniquement sur ses connaissances internes.
+## Résultats
 
-## Stack Technique
+Recherche du bon passage parmi 386, sur les 66 questions de validation. hit@4 est la métrique principale, car le RAG envoie 4 passages au LLM.
 
-- `Python` : langage principal du projet.
-- `FastAPI` : exposition du service sous forme d'API.
-- `LangChain` : orchestration des composants RAG.
-- `ChromaDB` : stockage vectoriel local.
-- `Hugging Face sentence-transformers` : génération des embeddings.
-- `Ollama` : exécution locale de modèles de langage.
-- `PyPDF` : extraction de contenu depuis des fichiers PDF.
+| modèle | hit@1 | hit@4 | hit@5 | MRR@10 |
+|---|---|---|---|---|
+| A : all-MiniLM-L6-v2 | 0,091 | 0,167 | 0,197 | 0,140 |
+| BM25 | 0,061 | 0,227 | 0,273 | 0,162 |
+| B : paraphrase-multilingual-MiniLM-L12-v2 | 0,152 | 0,288 | 0,348 | 0,226 |
+| C : B après fine-tuning | 0,303 | 0,515 | 0,530 | 0,413 |
 
-## Fonctionnalités
+Le fine-tuning fait passer hit@4 de 0,288 à 0,515. Il utilise `MultipleNegativesRankingLoss` sur 504 paires question / passage, pendant 3 époques.
 
-- Chargement de documents depuis un dossier local.
-- Support des formats PDF, TXT et Markdown.
-- Découpage des documents en chunks.
-- Génération d'embeddings avec `sentence-transformers`.
-- Indexation locale dans `ChromaDB`.
-- Réindexation idempotente sans duplication des mêmes chunks.
-- Recherche sémantique sur les documents indexés.
-- Génération de réponses contextualisées avec un modèle Ollama.
-- API HTTP avec `FastAPI`.
+Une première version des questions, générée avec `llama3.2`, recopiait trop le texte : BM25 trouvait le bon passage en premier dans 80 % des cas. Elles ont été régénérées avec `gemma3:27b`, puis filtrées pour retirer les questions trop proches du texte ou trop vagues.
 
-## Architecture
+## Outils
 
-```text
-RAG/
-  app/
-    __init__.py
-    config.py          # configuration de l'application
-    ingestion.py       # chargement et préparation des documents
-    main.py            # point d'entrée de l'API
-    rag_pipeline.py    # orchestration du pipeline RAG
-    vector_store.py    # gestion des embeddings et de la base vectorielle
-  data/
-    raw/               # documents sources
-    processed/         # documents transformés ou nettoyés
-  tests/               # tests du projet
-  vector_db/           # stockage vectoriel local
-  .env.example         # exemple de configuration d'environnement
-  .gitignore
-  pyproject.toml        # configuration des tests
-  requirements.txt     # dépendances Python
-  README.md
-```
+- Python, FastAPI, LangChain, Chroma, Ollama
+- sentence-transformers, PyTorch, rank_bm25, MLflow
+- Pydantic, prometheus-client
+- pytest, ruff, Docker, GitHub Actions
 
-## Rôle Des Modules
-
-- `config.py` centralise la configuration du projet.
-- `ingestion.py` gère le chargement, le nettoyage et le découpage des documents.
-- `vector_store.py` gère la création des embeddings et leur stockage dans la base vectorielle.
-- `rag_pipeline.py` orchestre la recherche documentaire et la génération de réponse.
-- `main.py` expose les fonctionnalités principales via une API.
+Matériel :
+- génération des questions sur un GPU NVIDIA L40S (RunPod) ;
+- fine-tuning sur un MacBook Pro M4
 
 ## Installation
-
-Cloner le projet puis créer un environnement virtuel :
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-```
-
-Installer les dépendances :
-
-```bash
 pip install -r requirements.txt
-```
-
-Créer le fichier d'environnement :
-
-```bash
 cp .env.example .env
-```
-
-Installer Ollama puis télécharger le modèle utilisé par défaut :
-
-```bash
-brew install ollama
 ollama pull llama3.2
 ```
 
 ## Utilisation
 
-Ajouter les documents à interroger dans le dossier :
-
-```text
-data/raw/
-```
-
-Lancer l'API :
-
 ```bash
 uvicorn app.main:app --reload
+curl -X POST localhost:8000/ingest
+curl -X POST localhost:8000/ask -H "Content-Type: application/json" \
+     -d '{"question": "Quelle est la puissance installée de la centrale du Gol ?"}'
 ```
 
-Vérifier que l'API fonctionne :
+Avec Docker :
 
 ```bash
-curl http://localhost:8000/health
+docker compose up --build
 ```
 
-Indexer les documents :
+Évaluation et fine-tuning :
 
 ```bash
-curl -X POST http://localhost:8000/ingest
+pip install -r requirements-train.txt
+python -m eval.evaluate
+python -m eval.finetune
 ```
 
-Poser une question :
+Les PDF du corpus d'évaluation sont listés dans `eval/corpus_source.md` et vont dans `data/corpus_eval/`.
+
+Tests :
 
 ```bash
-curl -X POST http://localhost:8000/ask \
-  -H "Content-Type: application/json" \
-  -d '{"question": "Résume les documents indexés"}'
-```
-
-La documentation interactive FastAPI est disponible à l'adresse :
-
-```text
-http://localhost:8000/docs
-```
-
-## Tests
-
-Exécuter la suite de tests :
-
-```bash
+ruff check app tests eval
 pytest -q
 ```
 
-La suite vérifie les endpoints de l'API, le chargement des documents, le découpage en chunks et la stabilité des identifiants utilisés pendant l'indexation.
+## Structure
 
-## Configuration
-
-Les variables principales sont configurées dans `.env` :
-
-```env
-APP_NAME="Personal RAG"
-DATA_RAW_DIR="data/raw"
-DATA_PROCESSED_DIR="data/processed"
-VECTOR_DB_DIR="vector_db"
-COLLECTION_NAME="personal_documents"
-EMBEDDING_MODEL="sentence-transformers/all-MiniLM-L6-v2"
-LLM_MODEL="llama3.2"
-CHUNK_SIZE=1000
-CHUNK_OVERLAP=150
-RETRIEVAL_K=4
+```text
+app/
+  config.py              paramètres lus depuis .env
+  ingestion.py           lecture des PDF et découpage en chunks
+  vector_store.py        embeddings et base Chroma
+  rag_pipeline.py        recherche des passages et réponse du LLM
+  main.py                routes de l'API
+  metrics.py             compteurs Prometheus
+  ontologie.py           classes, relations et vérification d'un triplet
+  extraction.py          extraction de triplets par LLM
+eval/
+  corpus_source.md       liste des documents et leurs liens
+  corpus.py              chargement du corpus d'évaluation
+  generate_questions.py  génération et filtrage des questions
+  split.py               découpage train / validation / test
+  review.py              échantillon de questions à relire
+  evaluate.py            comparaison des modèles et de BM25
+  finetune.py            fine-tuning du modèle d'embeddings
+data/
+  raw/                   PDF utilisés par l'API
+  corpus_eval/           questions et découpage (fichiers .jsonl)
+tests/                   tests unitaires
+.github/workflows/       CI
+Dockerfile, compose.yaml image et lancement de l'API
 ```
 
-## Cas D'usage
+## Limites
 
-- Interroger des documents personnels ou professionnels.
-- Résumer rapidement un ensemble de fichiers.
-- Retrouver des informations dans une base documentaire locale.
-- Expérimenter avec les architectures RAG et les LLM open source.
-
-## Compétences Mises En Avant
-
-- Architecture logicielle modulaire.
-- Recherche sémantique avec embeddings.
-- Utilisation de bases vectorielles.
-- Intégration de modèles de langage.
-- Conception d'API avec Python.
-- Structuration d'un projet IA exploitable dans un contexte professionnel.
+- Les questions sont synthétiques.
+- La validation contient 66 questions : les petits écarts ne sont pas significatifs.
+- Le jeu de test n'a pas encore été mesuré.
 
 ## Auteur
 
-Isidore ZONGO
+Isidore Zongo
