@@ -6,7 +6,6 @@ from pypdf import PdfReader
 
 from app.config import settings
 
-
 SUPPORTED_EXTENSIONS = {".md", ".pdf", ".txt"}
 
 

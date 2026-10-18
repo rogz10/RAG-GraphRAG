@@ -1,7 +1,6 @@
 from pathlib import Path
 
-from app.ingestion import load_documents
-from app.ingestion import split_documents
+from app.ingestion import load_documents, split_documents
 
 
 def test_load_documents_reads_text_file(tmp_path):

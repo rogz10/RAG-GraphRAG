@@ -1,7 +1,7 @@
 from hashlib import sha256
 
-from langchain_core.documents import Document
 from langchain_chroma import Chroma
+from langchain_core.documents import Document
 from langchain_huggingface import HuggingFaceEmbeddings
 
 from app.config import settings

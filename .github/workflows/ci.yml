@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+          cache: pip
+
+      # torch CPU d'abord, sinon pip télécharge la version CUDA (plusieurs Go)
+      - name: Installer torch CPU
+        run: pip install torch==2.13.0 --index-url https://download.pytorch.org/whl/cpu
+
+      - name: Installer les dépendances
+        run: pip install -r requirements.txt ruff==0.17.0
+
+      - name: Lint
+        run: ruff check app tests eval
+
+      - name: Tests
+        run: pytest -q
+
+  docker:
+    needs: tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Construire l'image
+        run: docker build -t rag-api .

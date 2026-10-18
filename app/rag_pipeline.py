@@ -5,7 +5,6 @@ from langchain_ollama import ChatOllama
 from app.config import settings
 from app.vector_store import get_vector_store
 
-
 SYSTEM_PROMPT = """
 Tu es un assistant RAG précis et fiable
 Réponds uniquement avec les informations présentes dans le contexte

@@ -5,7 +5,6 @@ from langchain_core.documents import Document
 
 from app.main import app
 
-
 client = TestClient(app)
 
 
@@ -57,3 +56,11 @@ def test_ask_returns_rag_response(ask_question):
 
     assert response.status_code == 200
     assert response.json()["answer"] == "Réponse de test"
+
+
+def test_metrics_counts_requests():
+    client.get("/health")
+    response = client.get("/metrics")
+
+    assert response.status_code == 200
+    assert 'rag_requests_total{endpoint="/health",status="200"}' in response.text
